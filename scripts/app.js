@@ -1,39 +1,35 @@
 class TaskFlow {
-    // Create the application state and prepare the task interface.
     constructor() {
         this.tasks = this.loadTasks();
         this.taskIdCounter = this.getNextTaskId();
+        this.currentFilter = 'all';
+        this.currentSort = 'created-desc';
+        this.searchQuery = '';
         this.initializeApp();
         this.bindEvents();
         this.renderTasks();
         this.updateStats();
     }
 
-    // Start the application and display the initial welcome message.
     initializeApp() {
         console.log('TaskFlow initialized successfully!');
         this.showWelcomeMessage();
     }
 
-    // Show a welcome message when there are no saved tasks.
     showWelcomeMessage() {
         if (this.tasks.length === 0) {
             console.log('Welcome to TaskFlow! Add your first task to get started.');
         }
     }
 
-    // Connect the task controls to their event handlers.
-    
-    // Connect the task controls to their event handlers.
     bindEvents() {
         const addTaskBtn = document.getElementById('addTaskBtn');
         const taskInput = document.getElementById('taskInput');
-
-        // Stop if required HTML elements are missing.
-        if (!addTaskBtn || !taskInput) {
-            console.error('Required task elements were not found.');
-            return;
-        }
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+        const sortSelect = document.getElementById('sortSelect');
+        const toggleAdvanced = document.getElementById('toggleAdvanced');
+        const clearAllFilters = document.getElementById('clearAllFilters');
 
         addTaskBtn.addEventListener('click', () => this.addTask());
 
@@ -43,27 +39,53 @@ class TaskFlow {
             }
         });
 
-        // Focus on input when page loads.
+        // Search functionality
+        searchInput.addEventListener('input', (e) => {
+            this.searchQuery = e.target.value.toLowerCase();
+            this.renderTasks();
+            this.updateSearchResults();
+        });
+
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            this.searchQuery = '';
+            this.renderTasks();
+            this.updateSearchResults();
+        });
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.setFilter(e.target.dataset.filter);
+            });
+        });
+
+        // Sort functionality
+        sortSelect.addEventListener('change', (e) => {
+            this.currentSort = e.target.value;
+            this.renderTasks();
+        });
+
+        // Advanced panel toggle
+        toggleAdvanced.addEventListener('click', () => {
+            this.toggleAdvancedPanel();
+        });
+
+        // Clear all filters
+        clearAllFilters.addEventListener('click', () => {
+            this.clearAllFilters();
+        });
+
+        // Focus on input when page loads
         taskInput.focus();
     }
 
-
-    // Validate and add a new task to the task list.
     addTask() {
         const taskInput = document.getElementById('taskInput');
         const taskText = taskInput.value.trim();
-if (taskText === '') {
-    this.showNotification('Please enter a task description', 'warning');
-    taskInput.focus();
-    return;
-}
 
-        // Prevent task descriptions longer than 200 characters.
-        if (taskText.length > 200) {
-            this.showNotification(
-                'Task cannot exceed 200 characters.',
-                'warning'
-            );
+        if (taskText === '') {
+            this.showNotification('Please enter a task description', 'warning');
             taskInput.focus();
             return;
         }
@@ -80,14 +102,13 @@ if (taskText === '') {
         this.saveTasks();
         this.renderTasks();
         this.updateStats();
-        
+
         taskInput.value = '';
         taskInput.focus();
-        
+
         this.showNotification('Task added successfully!', 'success');
     }
 
-    // Confirm and remove a task from the task list.
     deleteTask(taskId) {
         if (confirm('Are you sure you want to delete this task?')) {
             this.tasks = this.tasks.filter(task => task.id !== taskId);
@@ -98,7 +119,6 @@ if (taskText === '') {
         }
     }
 
-    // Toggle a task between completed and pending states.
     toggleTask(taskId) {
         const task = this.tasks.find(task => task.id === taskId);
         if (task) {
@@ -107,13 +127,12 @@ if (taskText === '') {
             this.saveTasks();
             this.renderTasks();
             this.updateStats();
-            
+
             const message = task.completed ? 'Task completed! 🎉' : 'Task marked as pending';
             this.showNotification(message, 'success');
         }
     }
 
-    // Prompt for a new description and update the selected task.
     editTask(taskId) {
         const task = this.tasks.find(task => task.id === taskId);
         if (task) {
@@ -127,35 +146,165 @@ if (taskText === '') {
         }
     }
 
-    // Render the current tasks and their action controls in the page.
+    setFilter(filter) {
+        this.currentFilter = filter;
+
+        // Update button states
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+
+        this.renderTasks();
+        this.updateSearchResults();
+    }
+
+    toggleAdvancedPanel() {
+        const panel = document.getElementById('advancedPanel');
+        const toggleIcon = document.querySelector('.toggle-icon');
+
+        if (panel.style.display === 'none' || !panel.style.display) {
+            panel.style.display = 'block';
+            toggleIcon.textContent = '▲';
+        } else {
+            panel.style.display = 'none';
+            toggleIcon.textContent = '▼';
+        }
+    }
+
+    clearAllFilters() {
+        // Reset search
+        document.getElementById('searchInput').value = '';
+        this.searchQuery = '';
+
+        // Reset filters
+        this.setFilter('all');
+
+        // Reset sort
+        this.currentSort = 'created-desc';
+        document.getElementById('sortSelect').value = 'created-desc';
+
+        this.renderTasks();
+        this.updateSearchResults();
+        this.showNotification('All filters cleared', 'info');
+    }
+
+    matchesSearch(task) {
+        if (!this.searchQuery) return true;
+        return task.text.toLowerCase().includes(this.searchQuery);
+    }
+
+    matchesFilter(task) {
+        const now = new Date();
+        const today = now.toDateString();
+        const taskCreated = new Date(task.createdAt);
+        const isRecent = (now - taskCreated) < (24 * 60 * 60 * 1000); // Last 24 hours
+
+        switch (this.currentFilter) {
+            case 'all':
+                return true;
+            case 'completed':
+                return task.completed;
+            case 'pending':
+                return !task.completed;
+            case 'recent':
+                return isRecent;
+            default:
+                return true;
+        }
+    }
+
+    getFilteredTasks() {
+        return this.tasks.filter(task =>
+            this.matchesSearch(task) && this.matchesFilter(task)
+        );
+    }
+
+    getSortedTasks(tasks) {
+        const sortedTasks = [...tasks];
+
+        switch (this.currentSort) {
+            case 'created-desc':
+                return sortedTasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            case 'created-asc':
+                return sortedTasks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            case 'alphabetical':
+                return sortedTasks.sort((a, b) => a.text.localeCompare(b.text));
+            case 'completion':
+                return sortedTasks.sort((a, b) => {
+                    if (a.completed !== b.completed) {
+                        return a.completed - b.completed;
+                    }
+                    return new Date(b.createdAt) - new Date(a.createdAt);
+                });
+            default:
+                return sortedTasks;
+        }
+    }
+
+    highlightSearchTerm(text) {
+        if (!this.searchQuery) return this.escapeHtml(text);
+
+        const regex = new RegExp(`(${this.escapeRegex(this.searchQuery)})`, 'gi');
+        const escapedText = this.escapeHtml(text);
+        return escapedText.replace(regex, '<mark class="search-highlight">$1</mark>');
+    }
+
+    escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    updateSearchResults() {
+        const searchResults = document.getElementById('searchResults');
+        const filteredTasks = this.getFilteredTasks();
+        const totalTasks = this.tasks.length;
+
+        if (this.searchQuery || this.currentFilter !== 'all') {
+            searchResults.textContent = `Showing ${filteredTasks.length} of ${totalTasks}`;
+            searchResults.style.display = 'inline';
+        } else {
+            searchResults.style.display = 'none';
+        }
+    }
+
     renderTasks() {
         const tasksList = document.getElementById('tasksList');
         const emptyState = document.getElementById('emptyState');
+        const noResults = document.getElementById('noResults');
+        const filteredTasks = this.getFilteredTasks();
+        const sortedTasks = this.getSortedTasks(filteredTasks);
+
+        // Hide both states initially
+        emptyState.style.display = 'none';
+        noResults.style.display = 'none';
 
         if (this.tasks.length === 0) {
+            // No tasks at all
             tasksList.style.display = 'none';
             emptyState.style.display = 'block';
             return;
         }
 
-        tasksList.style.display = 'flex';
-        emptyState.style.display = 'none';
+        if (sortedTasks.length === 0) {
+            // Tasks exist but none match filters
+            tasksList.style.display = 'none';
+            noResults.style.display = 'block';
+            return;
+        }
 
-        // Sort tasks: incomplete first, then by creation date
-        const sortedTasks = [...this.tasks].sort((a, b) => {
-            if (a.completed !== b.completed) {
-                return a.completed - b.completed;
-            }
-            return new Date(b.createdAt) - new Date(a.createdAt);
-        });
+        // Show tasks
+        tasksList.style.display = 'flex';
 
         tasksList.innerHTML = sortedTasks.map(task => `
             <div class="task-item ${task.completed ? 'completed' : ''}" data-task-id="${task.id}">
                 <div class="task-content">
-                    <div class="task-checkbox ${task.completed ? 'checked' : ''}" 
+                    <div class="task-checkbox ${task.completed ? 'checked' : ''}"
                          onclick="taskFlow.toggleTask(${task.id})">
                     </div>
-                    <span class="task-text">${this.escapeHtml(task.text)}</span>
+                    <span class="task-text">${this.highlightSearchTerm(task.text)}</span>
+                    <span class="task-meta">
+                        ${new Date(task.createdAt).toLocaleDateString()}
+                    </span>
                 </div>
                 <div class="task-actions">
                     <button class="task-btn edit-btn" onclick="taskFlow.editTask(${task.id})" title="Edit task">
@@ -167,24 +316,26 @@ if (taskText === '') {
                 </div>
             </div>
         `).join('');
+
+        this.updateSearchResults();
     }
 
-    // Calculate and display the current task counts.
     updateStats() {
         const totalTasks = this.tasks.length;
         const completedTasks = this.tasks.filter(task => task.completed).length;
         const pendingTasks = totalTasks - completedTasks;
+        const filteredTasks = this.getFilteredTasks().length;
 
         document.getElementById('totalTasks').textContent = totalTasks;
         document.getElementById('completedTasks').textContent = completedTasks;
         document.getElementById('pendingTasks').textContent = pendingTasks;
-        
+        document.getElementById('filteredTasks').textContent = filteredTasks;
+
         // Update task count in header
         const taskCount = document.getElementById('taskCount');
         taskCount.textContent = `${totalTasks} ${totalTasks === 1 ? 'task' : 'tasks'}`;
     }
 
-    // Save tasks and the next task ID in browser storage.
     saveTasks() {
         try {
             localStorage.setItem('taskflow_tasks', JSON.stringify(this.tasks));
@@ -195,7 +346,6 @@ if (taskText === '') {
         }
     }
 
-    // Load the saved tasks from browser storage.
     loadTasks() {
         try {
             const saved = localStorage.getItem('taskflow_tasks');
@@ -206,25 +356,16 @@ if (taskText === '') {
         }
     }
 
-    // Load the next available task ID from browser storage.
-    
-    // Load the next available task ID from browser storage.
     getNextTaskId() {
         try {
             const saved = localStorage.getItem('taskflow_counter');
-            const nextId = parseInt(saved, 10);
-
-            return Number.isNaN(nextId) || nextId < 1
-                ? 1
-                : nextId;
+            return saved ? parseInt(saved) : 1;
         } catch (error) {
             console.error('Failed to load task counter:', error);
             return 1;
         }
     }
 
-
-    // Escape task text before inserting it into HTML.
     escapeHtml(unsafe) {
         return unsafe
             .replace(/&/g, "&amp;")
@@ -234,12 +375,11 @@ if (taskText === '') {
             .replace(/'/g, "&#039;");
     }
 
-    // Display a temporary notification message to the user.
     showNotification(message, type = 'info') {
         // Simple notification system
         console.log(`[${type.toUpperCase()}] ${message}`);
-        
-        // Create notification elementxx
+
+        // Create notification element
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed;
@@ -264,18 +404,18 @@ if (taskText === '') {
             warning: '#ed8936',
             info: '#3182ce'
         };
-        
+
         notification.style.background = colors[type] || colors.info;
         notification.textContent = message;
-        
+
         document.body.appendChild(notification);
-        
+
         // Animate in
         setTimeout(() => {
             notification.style.opacity = '1';
             notification.style.transform = 'translateY(0)';
         }, 100);
-        
+
         // Remove after 3 seconds
         setTimeout(() => {
             notification.style.opacity = '0';
@@ -287,22 +427,20 @@ if (taskText === '') {
     }
 
     // Utility methods for potential future features
-    // Download all tasks as a JSON backup file.
     exportTasks() {
         const dataStr = JSON.stringify(this.tasks, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
         const url = URL.createObjectURL(dataBlob);
-        
+
         const link = document.createElement('a');
         link.href = url;
         link.download = 'taskflow_backup.json';
         link.click();
-        
+
         URL.revokeObjectURL(url);
         this.showNotification('Tasks exported successfully!', 'success');
     }
 
-    // Confirm and remove every task from the task list.
     clearAllTasks() {
         if (confirm('Are you sure you want to delete ALL tasks? This cannot be undone.')) {
             this.tasks = [];
@@ -313,13 +451,16 @@ if (taskText === '') {
         }
     }
 
-    // Return summary counts for all tasks and today's activity.
     getTaskStats() {
         const now = new Date();
         const stats = {
             total: this.tasks.length,
             completed: this.tasks.filter(t => t.completed).length,
             pending: this.tasks.filter(t => !t.completed).length,
+            filtered: this.getFilteredTasks().length,
+            searchQuery: this.searchQuery,
+            currentFilter: this.currentFilter,
+            currentSort: this.currentSort,
             createdToday: this.tasks.filter(t => {
                 const taskDate = new Date(t.createdAt);
                 return taskDate.toDateString() === now.toDateString();
@@ -328,14 +469,63 @@ if (taskText === '') {
                 if (!t.completedAt) return false;
                 const completedDate = new Date(t.completedAt);
                 return completedDate.toDateString() === now.toDateString();
+            }).length,
+            recent: this.tasks.filter(t => {
+                const taskCreated = new Date(t.createdAt);
+                return (now - taskCreated) < (24 * 60 * 60 * 1000);
             }).length
         };
         return stats;
     }
+
+    // Advanced search functionality
+    searchByKeyword(keyword) {
+        this.searchQuery = keyword.toLowerCase();
+        document.getElementById('searchInput').value = keyword;
+        this.renderTasks();
+        this.updateSearchResults();
+    }
+
+    // Bulk operations
+    markAllCompleted() {
+        const filteredTasks = this.getFilteredTasks();
+        const pendingTasks = filteredTasks.filter(task => !task.completed);
+
+        if (pendingTasks.length === 0) {
+            this.showNotification('No pending tasks to complete', 'info');
+            return;
+        }
+
+        pendingTasks.forEach(task => {
+            task.completed = true;
+            task.completedAt = new Date().toISOString();
+        });
+
+        this.saveTasks();
+        this.renderTasks();
+        this.updateStats();
+        this.showNotification(`Marked ${pendingTasks.length} tasks as completed`, 'success');
+    }
+
+    deleteCompleted() {
+        const completedTasks = this.tasks.filter(task => task.completed);
+
+        if (completedTasks.length === 0) {
+            this.showNotification('No completed tasks to delete', 'info');
+            return;
+        }
+
+        if (confirm(`Delete ${completedTasks.length} completed tasks? This cannot be undone.`)) {
+            this.tasks = this.tasks.filter(task => !task.completed);
+            this.saveTasks();
+            this.renderTasks();
+            this.updateStats();
+            this.showNotification(`Deleted ${completedTasks.length} completed tasks`, 'success');
+        }
+    }
 }
 
 // Initialize the app when DOM is loaded
-// Create the TaskFlow instance after the page structure is available.
 document.addEventListener('DOMContentLoaded', () => {
     window.taskFlow = new TaskFlow();
 });
