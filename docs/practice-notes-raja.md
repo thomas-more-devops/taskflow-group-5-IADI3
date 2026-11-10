@@ -2,3 +2,4 @@
 - Practice step 2
 - Practice step 3
 - Practice step 4
+- Extra tip
