@@ -5,3 +5,5 @@
 ## Cherry-pick
 
 ## Stash
+
+Cherry-pick copies a selected commit to another branch.
