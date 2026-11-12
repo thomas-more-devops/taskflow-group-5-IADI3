@@ -3,3 +3,5 @@
 ## Interactive rebase
 
 ## Cherry-pick
+
+## Stash
